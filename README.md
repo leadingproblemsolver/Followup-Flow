@@ -1,6 +1,6 @@
 # FollowUp Flow — Next Founders MVP
 
-Small shops often receive customer inquiries across multiple chats and forget to follow up. FollowUp Flow puts those requests in one simple pipeline.
+Small shops often receive customer inquiries across multiple chats and forget to follow up. FollowUp Flow puts those requests in one simple pipeline. 
 
 ## Run (Python 3.9+, no dependencies)
 
