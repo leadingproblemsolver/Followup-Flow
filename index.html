@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FollowUp Flow — Inquiry Tracker</title>
+<style>
+:root{font-family:system-ui,-apple-system,sans-serif;color:#202942;background:#f4f7fc}*{box-sizing:border-box}body{margin:0}.wrap{max-width:1100px;margin:auto;padding:25px}header{display:flex;justify-content:space-between;align-items:center}.brand{font-size:25px;font-weight:800}.brand b{color:#4f6dea}.tag{background:#e7ecff;border-radius:30px;padding:8px 13px;color:#4259a3;font-size:12px}.hero{margin:30px 0}.hero h1{font-size:clamp(30px,5vw,48px);letter-spacing:-1px;margin:0}.hero p{color:#6b7895;max-width:620px;line-height:1.55}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px}.metric,.panel{background:white;border:1px solid #e2e7f1;border-radius:16px;padding:21px;box-shadow:0 4px 25px #29395908}.metric strong{display:block;font-size:30px}.metric small,.muted{color:#8190a9}.layout{display:grid;grid-template-columns:330px 1fr;gap:16px;align-items:start}.panel h2{margin:0 0 12px}label{display:block;font-size:13px;font-weight:700;margin:14px 0 5px}input,textarea,select{font:inherit;width:100%;padding:11px;border-radius:8px;border:1px solid #d7deec}textarea{min-height:80px}button{border:0;background:#4b6ced;color:white;font:inherit;font-weight:700;padding:12px;border-radius:8px;cursor:pointer}button:disabled{opacity:.6}.primary{width:100%;margin-top:17px}.secondary{background:#edf0ff;color:#4154a4}.toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px}.scroll{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:13px;text-align:left}th,td{padding:12px 8px;border-bottom:1px solid #edf0f6;text-align:left;vertical-align:top}th{color:#7786a3;font-size:11px;text-transform:uppercase}.status{min-width:120px}.empty{text-align:center;padding:35px;color:#8996ac}.error{color:#bd334b}.success{color:#087e59}footer{text-align:center;color:#8791a5;font-size:12px;margin:30px 0}@media(max-width:760px){.layout{grid-template-columns:1fr}.metrics{gap:7px}.metric{padding:12px}.metric strong{font-size:21px}.panel{padding:16px}}
+</style>
+</head>
+<body><div class="wrap">
+<header><div class="brand">followup<b>flow.</b></div><div class="tag">Small-business inquiry tracker</div></header>
+<section class="hero"><h1>Every inquiry deserves a next step.</h1><p>Keep customer inquiries organized, see which still need attention, and track potential order value. No messaging automation is included in this MVP.</p></section>
+<div class="metrics"><div class="metric"><small>Total inquiries</small><strong id="total">0</strong></div><div class="metric"><small>Awaiting follow-up</small><strong id="pending">0</strong></div><div class="metric"><small>Open opportunity value</small><strong id="value">$0</strong></div></div>
+<main class="layout">
+<section class="panel"><h2>New inquiry</h2><form id="form">
+<label for="customer">Customer name</label><input id="customer" required maxlength="500" placeholder="e.g. Aisha">
+<label for="contact">Email / phone / WhatsApp</label><input id="contact" required maxlength="500" placeholder="e.g. +974...">
+<label for="request">What do they need?</label><textarea id="request" required maxlength="500" placeholder="e.g. 30 gift boxes"></textarea>
+<label for="valueInput">Potential value (USD)</label><input id="valueInput" type="number" min="0" max="100000000" step="0.01" value="0">
+<button class="primary" type="submit">Save inquiry</button><p id="notice" role="status" aria-live="polite"></p>
+</form></section>
+<section class="panel"><div class="toolbar"><h2>Inquiry pipeline</h2><button class="secondary" id="export" type="button">Export CSV ↓</button></div>
+<div class="scroll"><table><thead><tr><th>Customer</th><th>Request</th><th>Value</th><th>Status</th></tr></thead><tbody id="rows"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody></table></div></section>
+</main><footer>Hackathon MVP · Local use only · No login or automated messaging · Do not enter actual customer personal data</footer>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(n);
+const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e};
+async function refresh(){
+try{
+const res=await fetch('/api/inquiries');if(!res.ok)throw Error('Load failed');
+const data=await res.json();
+$('total').textContent=data.length;
+$('pending').textContent=data.filter(x=>x.status==='new').length;
+$('value').textContent=money(data.filter(x=>['new','contacted'].includes(x.status)).reduce((sum,x)=>sum+x.value,0));
+const body=$('rows');body.replaceChildren();
+if(!data.length){const tr=el('tr');const td=el('td','No inquiries yet. Add your first inquiry.','empty');td.colSpan=4;tr.append(td);body.append(tr)}
+data.forEach(x=>{
+const tr=el('tr'),cust=el('td'),name=el('strong',x.customer),contact=el('div',x.contact,'muted');
+cust.append(name,contact);
+const req=el('td',x.request),value=el('td',money(x.value)),statusCell=el('td'),sel=el('select',undefined,'status');
+sel.setAttribute('aria-label','Status for '+x.customer);
+['new','contacted','won','lost'].forEach(v=>{const opt=el('option',v[0].toUpperCase()+v.slice(1));opt.value=v;sel.append(opt)});
+sel.value=x.status;
+sel.addEventListener('change',async()=>{try{const r=await fetch('/api/inquiries/'+x.id+'/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:sel.value})});if(!r.ok)throw Error('Update failed');await refresh()}catch(err){alert(err.message);await refresh()}});
+statusCell.append(sel);tr.append(cust,req,value,statusCell);body.append(tr)});
+}catch(err){$('rows').replaceChildren();const tr=el('tr'),td=el('td','Unable to connect to the server.','empty');td.colSpan=4;tr.append(td);$('rows').append(tr)}
+}
+$('form').addEventListener('submit',async event=>{
+event.preventDefault();const btn=event.currentTarget.querySelector('button');btn.disabled=true;
+const payload={customer:$('customer').value,contact:$('contact').value,request:$('request').value,value:$('valueInput').value};
+try{const response=await fetch('/api/inquiries',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const result=await response.json();if(!response.ok)throw Error(result.error||'Save failed');$('form').reset();$('valueInput').value='0';$('notice').textContent='Inquiry saved.';$('notice').className='success';await refresh()}
+catch(error){$('notice').textContent=error.message;$('notice').className='error'}
+finally{btn.disabled=false}
+});
+$('export').addEventListener('click',()=>{location.href='/api/export'});refresh();
+</script></body></html>
